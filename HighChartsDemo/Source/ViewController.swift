@@ -8,6 +8,7 @@
 
 import UIKit
 import Highcharts
+import WebKit
 
 
 class ViewController: UIViewController {
@@ -16,6 +17,7 @@ class ViewController: UIViewController {
     let pxPerSecond = 300.0 / 60.0
     
     var chartView: HIChartView!
+    var webView: WKWebView!
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -28,10 +30,10 @@ class ViewController: UIViewController {
         plotArea.minWidth = 1000
         plotArea.scrollPositionX = 0
         
-        let axis = HIXAxis()
-        axis.min = 0
-        axis.minRange = 1000
-        options.xAxis = [axis]
+        let xAxis = HIXAxis()
+        xAxis.min = 0
+        xAxis.minRange = 1000
+        options.xAxis = [xAxis]
         
         let chart = HIChart()
         chart.type = "line"
@@ -49,12 +51,6 @@ class ViewController: UIViewController {
         options.title = title
         
         let series = HILine()
-//
-//        var newData = [Double]()
-//        for _ in 0..<15000 {
-//            newData.append(Double(arc4random() % 200))
-//        }
-//        plotArea.minWidth = NSNumber(value: 768.0 * 3.0)
         
         series.data = []
         options.series = [series]
@@ -63,39 +59,86 @@ class ViewController: UIViewController {
         
         view.addSubview(chartView)
 
+        beginAppendingDataUsingWrapper(series: series, plotArea: plotArea)
         
-        var secondsElapsed = 0.0
+//        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+//            self.inspectWebView()
+//        }
+//        beginAppendingDataDirectlyWithJS(series: series, plotArea: plotArea)
         
-        func appendData() {
-            var newData = [Double]()
-            for _ in 0..<10 {
-                newData.append(Double(arc4random() % 200))
-            }
-
-            var oldData = series.data
-            oldData?.append(contentsOf: newData)
-            series.data = oldData
-
-            // Update parameters
-            secondsElapsed += 1.0
-            plotArea.minWidth = NSNumber(value: pxPerSecond * secondsElapsed)
-
-//            chartView.updateOptions()
-
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                appendData()
-            }
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now()) {
-            appendData()
-        }
     }
 
     override func didReceiveMemoryWarning() {
         super.didReceiveMemoryWarning()
     }
 
+    func beginAppendingDataUsingWrapper(series: HILine, plotArea: HIScrollablePlotArea) {
+        
+        var secondsElapsed = 0.0
+        
+        func appendData() {
+            var newData = [Double]()
+            for _ in 0..<600 {
+                newData.append(Double(arc4random() % 200))
+            }
+            
+            var oldData = series.data
+            oldData?.append(contentsOf: newData)
+            series.data = oldData
+            
+            // Update parameters
+            secondsElapsed += 1.0
+            plotArea.minWidth = NSNumber(value: pxPerSecond * 60 * secondsElapsed)
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { appendData() }
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now()) { appendData() }
+    }
+    
+    func inspectWebView() {
+        for subview in chartView.subviews where subview is WKWebView {
+            self.webView = subview as! WKWebView
+            break
+        }
+        
+        let js = "document.documentElement.outerHTML.toString()"
+        webView.evaluateJavaScript(js) { (result, error) in
+            if let result = result {
+                print("WebView RESULT: \(result)")
+            } else {
+                print("WebView ERROR: \(String(describing: error))")
+            }
+        }
+        
+    }
+    
+    func beginAppendingDataDirectlyWithJS(series: HILine, plotArea: HIScrollablePlotArea) {
+        
+        // Append data
+        let appendJS = """
+var series = chart.series[0];
+setInterval(function () {
+    for (i = 0; i < 10; i++) {
+          var animation = {
+            duration: 800,
+            easing: 'easeOutBounce'
+        }
+        series.addPoint(Math.round(Math.random() * 100), false, false, animation);
+    }
+    chart.redraw()
+
+}, 1000);
+"""
+        webView.evaluateJavaScript(appendJS) { (result, error) in
+            if let result = result {
+                print("Append OK")
+            } else {
+                print("Append ERROR: \(String(describing: error))")
+            }
+        }
+        
+    }
 
 }
 
